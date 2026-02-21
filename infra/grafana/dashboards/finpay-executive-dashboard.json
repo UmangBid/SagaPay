@@ -1,0 +1,92 @@
+{
+  "uid": "sagapay-exec",
+  "title": "SagaPay Executive Dashboard",
+  "tags": ["sagapay", "executive"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "API p95 Latency (s)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"api-gateway\"}[5m])) by (le, route))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "API Request Rate (req/s)",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{service=\"api-gateway\"}[5m])) by (route)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "End-to-End Saga p95 (s)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(payment_e2e_seconds_bucket{service=\"orchestrator\"}[5m])) by (le, terminal_state))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Kafka Queue Delay p95 (s)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(event_queue_delay_seconds_bucket[5m])) by (le, service, topic))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Outbox Pending",
+      "targets": [
+        {
+          "expr": "outbox_pending_total"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Outbox Oldest Pending Age (s)",
+      "targets": [
+        {
+          "expr": "outbox_oldest_pending_age_seconds"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Retries (5m rate)",
+      "targets": [
+        {
+          "expr": "sum(rate(retries_total[5m])) by (service, dependency)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "DLQ Published (5m rate)",
+      "targets": [
+        {
+          "expr": "sum(rate(dlq_published_total[5m])) by (service, topic, error_type)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Duplicate Events Skipped (5m rate)",
+      "targets": [
+        {
+          "expr": "sum(rate(duplicate_events_skipped_total[5m])) by (service, topic)"
+        }
+      ]
+    }
+  ]
+}

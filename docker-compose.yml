@@ -1,0 +1,157 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB_ORCHESTRATOR}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  orchestrator:
+    build: .
+    command: bash -lc "./scripts/start_service.sh orchestrator finpay.services.orchestrator.main:app 8001"
+    depends_on:
+      - kafka
+      - redis
+      - postgres
+    environment:
+      SERVICE_NAME: orchestrator
+      POSTGRES_DSN: ${ORCHESTRATOR_POSTGRES_DSN}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379/0
+      API_KEY: ${API_KEY}
+    ports:
+      - "8001:8001"
+
+  api-gateway:
+    build: .
+    command: bash -lc "./scripts/start_service.sh api-gateway finpay.services.api_gateway.main:app 8000"
+    depends_on:
+      - orchestrator
+      - redis
+    environment:
+      SERVICE_NAME: api-gateway
+      API_KEY: ${API_KEY}
+      ORCHESTRATOR_URL: http://orchestrator:8001
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      POSTGRES_DSN: ${ORCHESTRATOR_POSTGRES_DSN}
+    ports:
+      - "8000:8000"
+
+  risk:
+    build: .
+    command: bash -lc "./scripts/start_service.sh risk finpay.services.risk.main:app 8002"
+    depends_on:
+      - kafka
+      - redis
+      - postgres
+    environment:
+      SERVICE_NAME: risk
+      POSTGRES_DSN: ${RISK_POSTGRES_DSN}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379/0
+      API_KEY: ${API_KEY}
+      RISK_VELOCITY_PER_HOUR: 20
+      RISK_REVIEW_AMOUNT_CENTS: 100000
+      RISK_DENY_FREQUENCY_THRESHOLD: 50
+    ports:
+      - "8002:8002"
+
+  provider-adapter:
+    build: .
+    command: bash -lc "./scripts/start_service.sh provider-adapter finpay.services.provider_adapter.main:app 8003"
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      SERVICE_NAME: provider-adapter
+      POSTGRES_DSN: ${PROVIDER_POSTGRES_DSN}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379/0
+      API_KEY: ${API_KEY}
+    ports:
+      - "8003:8003"
+
+  ledger:
+    build: .
+    command: bash -lc "./scripts/start_service.sh ledger finpay.services.ledger.main:app 8004"
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      SERVICE_NAME: ledger
+      POSTGRES_DSN: ${LEDGER_POSTGRES_DSN}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379/0
+      API_KEY: ${API_KEY}
+    ports:
+      - "8004:8004"
+
+  notification:
+    build: .
+    command: bash -lc "./scripts/start_service.sh notification finpay.services.notification.main:app 8005"
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      SERVICE_NAME: notification
+      POSTGRES_DSN: ${NOTIFICATION_POSTGRES_DSN}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379/0
+      API_KEY: ${API_KEY}
+    ports:
+      - "8005:8005"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.110.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./infra/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4318:4318"
