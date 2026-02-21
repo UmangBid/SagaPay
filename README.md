@@ -510,7 +510,3 @@ pytest -q
 - Add auth hardening options (JWT/OAuth2) for environments beyond internal API-key usage.
 - Add CI/CD pipeline with migration checks, contract tests, and release gates.
 - Add formal SLO/SLA alerting rules tied to p95 latency, DLQ rates, and outbox backlog age.
-
-## License
-This repository currently does not include a license file.
-If we plan to open-source this project, we should add a `LICENSE` file explicitly.
